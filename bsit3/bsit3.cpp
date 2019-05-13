@@ -22,7 +22,6 @@ void CreateTask(ITaskService* pService);
 void DeleteTask(ITaskService* pService);
 HRESULT CreateSecurityTask(IEventTrigger *pEventTrigger);
 HRESULT CreatePingTask(IEventTrigger *pEventTrigger);
-HRESULT CreateOtherTask(IEventTrigger *pEventTrigger);
 void GetTasks(ITaskService *pService);
 void GetRunningTasks(ITaskService *pService);
 void GetTasksInFolder(PWCHAR path, ITaskService *pService);
@@ -134,14 +133,12 @@ void CreateTask(ITaskService* pService)
 	printf("\
 1 - security changes task\n\
 2 - ping block task\n\
-3 - other task\n\n\
 Task type: ");
 	scanf("%d", &type);
 	switch (type)
 	{
 	case 1: hr = CreateSecurityTask(pEventTrigger); break;
 	case 2: hr = CreatePingTask(pEventTrigger); break;
-	case 3: hr = CreateOtherTask(pEventTrigger); break;
 	default: pEventTrigger->Release(); pFolder->Release(); pTask->Release(); return;
 	}
 	pEventTrigger->Release();
@@ -160,8 +157,6 @@ Task type: ");
 		pTask->Release();
 		return;
 	}
-	//std::wstring wstrExePath = _wgetenv(L"WINDIR");
-	//wstrExePath += L"\\SYSTEM32\\NOTEPAD.EXE";
 
 	// Create the action, specifying that it is an executable action.
 	IAction *pAction = NULL;
@@ -197,14 +192,6 @@ Task type: ");
 		hr = pExecAction->put_Arguments(_bstr_t(L"-WindowStyle hidden -Command \"&\
 			{[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');\
 			[System.Windows.Forms.MessageBox]::Show('ping rejected!', 'ping rejected')}\""));
-		break;
-	case 3:
-		hr = pExecAction->put_Path(_bstr_t(L"powershell"));
-		WCHAR arg[256];
-		wsprintf(arg, L"-WindowStyle hidden -Command \"&\
-			{[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');\
-			[System.Windows.Forms.MessageBox]::Show('Task %s!', 'Task')}\"", taskName);
-		hr = pExecAction->put_Arguments(_bstr_t(arg));
 		break;
 	}
 	pExecAction->Release();
@@ -303,7 +290,7 @@ HRESULT CreatePingTask(IEventTrigger *pEventTrigger)
 		<Query Id = \"0\" Path = \"Security\">\
 		<Select Path = \"Security\">\
 		*[System[(EventID = 5152)]] and\
-		*[EventData[Data[@Name='SourceAddress'] = '192.168.4.223']]\
+		*[EventData[Data[@Name='SourceAddress'] = '192.168.0.103']]\
 		</Select>\
 		</Query>\
 		</QueryList>\
@@ -313,94 +300,6 @@ HRESULT CreatePingTask(IEventTrigger *pEventTrigger)
 		printf("Cannot put subscribition: %x\n\n", hr);
 		return hr;
 	}
-	//ITaskNamedValueCollection *pValueQueries = NULL;
-	//hr = pEventTrigger->get_ValueQueries(&pValueQueries);
-	//if (FAILED(hr))
-	//{
-	//	printf("\nCannot get value queries: %x", hr);
-	//	return hr;
-	//}
-	//ITaskNamedValuePair* pNamedValuePair = NULL;
-	//hr = pValueQueries->Create(_bstr_t(L"SourceAddress"),
-	//	_bstr_t(L"Event/EventData/Data[@Name='SourceAddress']"), &pNamedValuePair);
-	//if (FAILED(hr))
-	//{
-	//	printf("\nCannot create name value pair: %x", hr);
-	//	pValueQueries->Release();
-	//	return hr;
-	//}
-	//pValueQueries->Release();
-	//pNamedValuePair->Release();
-	return hr;
-}
-HRESULT CreateOtherTask(IEventTrigger *pEventTrigger)
-{
-	HRESULT hr;
-	WCHAR time[32];
-	printf("Put start time for task in format 'YYYY-MM-DDTHH:MM:SS' or '0': ");
-	scanf("%S", time);
-	if (wcscmp(time, L"0") != 0)
-	{
-		hr = pEventTrigger->put_StartBoundary(_bstr_t(time));
-		if (FAILED(hr))
-			printf("Cannot put the trigger start boundary: %x\n\n", hr);
-		else
-		{
-			printf("Put end time for task in format 'YYYY-MM-DDTHH:MM:SS': ");
-			scanf("%S", time);
-			if (wcscmp(time, L"0") != 0)
-			{
-				hr = pEventTrigger->put_EndBoundary(_bstr_t(time));
-				if (FAILED(hr))
-					printf("Cannot put the trigger end boundary: %x\n\n", hr);
-			}
-		}
-	}
-	printf("Put delay for task in format 'P[nD][T[nH][nM][nS]]' or '0': "); // P[nY][nM][nD]T[nH][nM][nS]
-	scanf("%S", time);
-	if (wcscmp(time, L"0") != 0)
-	{
-		hr = pEventTrigger->put_Delay(_bstr_t(time));
-		if (FAILED(hr))
-			printf("Cannot put the trigger delay: %x\n\n", hr);
-	}
-	int nType;
-	WCHAR type[16];
-	printf("\
-1 - Application\n\
-2 - Security\n\
-3 - Setup\n\
-4 - System\n\
-5 - Forwarded Events\n\n\
-Event type: ");
-	scanf("%d", &nType);
-	switch (nType)
-	{
-	case 1: wcscpy(type, L"Aplication"); break;
-	case 2: wcscpy(type, L"Security"); break;
-	case 3: wcscpy(type, L"Setup"); break;
-	case 4: wcscpy(type, L"System"); break;
-	case 5: wcscpy(type, L"Forwarded Events"); break;
-	default: printf("Wrong event type!\n\n"); return hr;
-	}
-	int nEventId = 0;
-	printf("Enter number of events for trigger: ");
-	scanf("%d", &nEventId);
-	int eventId;
-	printf("Enter event ID: ");
-	scanf("%d", &eventId);
-	WCHAR subscription[512] = { 0 };
-	wsprintf(subscription, L"<QueryList><Query Id='1'><Select Path='%s'>*[System[(EventID=%d)", type, eventId); // *[System/Level=2]
-	for (int i = 1; i < nEventId; i++)
-	{
-		printf("Enter event ID: ");
-		scanf("%d", &eventId);
-		wsprintf(subscription + wcslen(subscription), L"or(EventID=%d)", eventId);
-	}
-	wsprintf(subscription + wcslen(subscription), L"]]</Select></Query></QueryList>");
-	hr = pEventTrigger->put_Subscription(_bstr_t(subscription));
-	if (FAILED(hr))
-		printf("Cannot put the event query: %x\n\n", hr);
 	return hr;
 }
 void GetTasks(ITaskService *pService)
@@ -568,7 +467,7 @@ int main()
 	CreateTask(pService);
 	//GetRunningTasks(pService);
 	//GetTasks(pService);
-	//DeleteTask(pService);
+	DeleteTask(pService);
 	//GetTasks(pService);
 	return 0;
 }
