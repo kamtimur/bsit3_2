@@ -1,0 +1,40 @@
+<?xml version="1.0" ?>
+<!--
+This sample schedules a task to start on a bi-weekly basis.
+-->
+<Task xmlns="https://schemas.microsoft.com/windows/2004/02/mit/task">
+    <RegistrationInfo>
+        <Date>2005-05-01T09:00:00</Date>
+        <Author>AuthorName</Author>
+        <Version>1.0.0</Version>
+        <Description>Notepad starts every other week on Monday at 8:00am.</Description>
+    </RegistrationInfo>
+    <Triggers>
+        <CalendarTrigger>
+            <StartBoundary>2005-05-02T08:00:00</StartBoundary>
+            <EndBoundary>2006-01-01T00:00:00</EndBoundary>
+            <ScheduleByWeek>
+                <WeeksInterval>2</WeeksInterval>
+                <DaysOfWeek>
+                    <Monday/>
+                </DaysOfWeek>
+            </ScheduleByWeek>
+        </CalendarTrigger>
+    </Triggers>
+    <Principals>
+        <Principal>
+            <UserId>Administrator</UserId>
+            <LogonType>InteractiveToken</LogonType>
+        </Principal>
+    </Principals>
+    <Settings>
+        <Enabled>true</Enabled>
+        <AllowStartOnDemand>true</AllowStartOnDemand>
+        <AllowHardTerminate>true</AllowHardTerminate>
+    </Settings>
+    <Actions>
+        <Exec>
+            <Command>notepad.exe</Command>
+        </Exec>
+    </Actions>
+</Task>

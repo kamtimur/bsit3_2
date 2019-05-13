@@ -1,4 +1,4 @@
-#include <cstdio>
+﻿#include <cstdio>
 #include <comutil.h>
 #include <string>
 #include <string>
@@ -7,6 +7,8 @@
 #include <msterr.h>
 #include <taskschd.h>
 #include <comutil.h>
+#include <fstream>
+#include <streambuf>
 
 #pragma comment(lib, "comsuppw.lib")
 #pragma comment(lib, "kernel32.lib")
@@ -158,8 +160,8 @@ Task type: ");
 		pTask->Release();
 		return;
 	}
-	std::wstring wstrExePath = _wgetenv(L"WINDIR");
-	wstrExePath += L"\\SYSTEM32\\NOTEPAD.EXE";
+	//std::wstring wstrExePath = _wgetenv(L"WINDIR");
+	//wstrExePath += L"\\SYSTEM32\\NOTEPAD.EXE";
 
 	// Create the action, specifying that it is an executable action.
 	IAction *pAction = NULL;
@@ -191,8 +193,10 @@ Task type: ");
 			[System.Windows.Forms.MessageBox]::Show('Security changed!', 'Security change task')}\""));
 		break;
 	case 2:
-		hr = pExecAction->put_Path(_bstr_t(L"D:\\ip_filter.exe"));
-		hr = pExecAction->put_Arguments(_bstr_t("$(SourceAddress) D:\\ip.conf"));
+		hr = pExecAction->put_Path(_bstr_t(L"powershell"));
+		hr = pExecAction->put_Arguments(_bstr_t(L"-WindowStyle hidden -Command \"&\
+			{[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');\
+			[System.Windows.Forms.MessageBox]::Show('ping rejected!', 'ping rejected')}\""));
 		break;
 	case 3:
 		hr = pExecAction->put_Path(_bstr_t(L"powershell"));
@@ -239,6 +243,8 @@ Task type: ");
 	}
 	//  Save the task in the root folder.
 	IRegisteredTask *pRegisteredTask = NULL;
+	VARIANT varPassword;
+	varPassword.vt = VT_EMPTY;
 	hr = pFolder->RegisterTaskDefinition(_bstr_t(taskName), pTask, TASK_CREATE_OR_UPDATE,
 		_variant_t(), _variant_t(), TASK_LOGON_INTERACTIVE_TOKEN, _variant_t(L""), &pRegisteredTask);
 	if (FAILED(hr))
@@ -292,34 +298,39 @@ HRESULT CreateSecurityTask(IEventTrigger *pEventTrigger)
 }
 HRESULT CreatePingTask(IEventTrigger *pEventTrigger)
 {
-	HRESULT hr = pEventTrigger->put_Subscription(_bstr_t("<QueryList>\
-<Query Id = \"0\" Path = \"Security\"><Select Path = \"Security\">\
-	*[System[(EventID = 5152)]]</Select>\
-	</Query>\
-</QueryList>"));
+	HRESULT hr = pEventTrigger->put_Subscription(_bstr_t(
+		"<QueryList>\
+		<Query Id = \"0\" Path = \"Security\">\
+		<Select Path = \"Security\">\
+		*[System[(EventID = 5152)]] and\
+		*[EventData[Data[@Name='SourceAddress'] = '192.168.4.223']]\
+		</Select>\
+		</Query>\
+		</QueryList>\
+	"));
 	if (FAILED(hr))
 	{
 		printf("Cannot put subscribition: %x\n\n", hr);
 		return hr;
 	}
-	ITaskNamedValueCollection *pValueQueries = NULL;
-	hr = pEventTrigger->get_ValueQueries(&pValueQueries);
-	if (FAILED(hr))
-	{
-		printf("\nCannot get value queries: %x", hr);
-		return hr;
-	}
-	ITaskNamedValuePair* pNamedValuePair = NULL;
-	hr = pValueQueries->Create(_bstr_t(L"SourceAddress"),
-		_bstr_t(L"Event/EventData/Data[@Name='SourceAddress']"), &pNamedValuePair);
-	if (FAILED(hr))
-	{
-		printf("\nCannot create name value pair: %x", hr);
-		pValueQueries->Release();
-		return hr;
-	}
-	pValueQueries->Release();
-	pNamedValuePair->Release();
+	//ITaskNamedValueCollection *pValueQueries = NULL;
+	//hr = pEventTrigger->get_ValueQueries(&pValueQueries);
+	//if (FAILED(hr))
+	//{
+	//	printf("\nCannot get value queries: %x", hr);
+	//	return hr;
+	//}
+	//ITaskNamedValuePair* pNamedValuePair = NULL;
+	//hr = pValueQueries->Create(_bstr_t(L"SourceAddress"),
+	//	_bstr_t(L"Event/EventData/Data[@Name='SourceAddress']"), &pNamedValuePair);
+	//if (FAILED(hr))
+	//{
+	//	printf("\nCannot create name value pair: %x", hr);
+	//	pValueQueries->Release();
+	//	return hr;
+	//}
+	//pValueQueries->Release();
+	//pNamedValuePair->Release();
 	return hr;
 }
 HRESULT CreateOtherTask(IEventTrigger *pEventTrigger)
@@ -519,5 +530,45 @@ void PrintState(int taskState)
 
 int main()
 {
+	//  ------------------------------------------------------
+	//  Initialize COM.
+	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	if (FAILED(hr))
+	{
+		printf("\nCoInitializeEx failed: %x", hr);
+		return 1;
+	}
+
+	//  ------------------------------------------------------
+	//  Create an instance of the Task Service. 
+	ITaskService *pService = NULL;
+	hr = CoCreateInstance(CLSID_TaskScheduler,
+		NULL,
+		CLSCTX_INPROC_SERVER,
+		IID_ITaskService,
+		(void**)&pService);
+	if (FAILED(hr))
+	{
+		printf("Failed to create an instance of ITaskService: %x", hr);
+		CoUninitialize();
+		return 1;
+	}
+
+	//  Connect to the task service.
+	hr = pService->Connect(_variant_t(), _variant_t(),
+		_variant_t(), _variant_t());
+	if (FAILED(hr))
+	{
+		printf("ITaskService::Connect failed: %x", hr);
+		pService->Release();
+		CoUninitialize();
+		return 1;
+	}
+	
+	CreateTask(pService);
+	//GetRunningTasks(pService);
+	//GetTasks(pService);
+	//DeleteTask(pService);
+	//GetTasks(pService);
 	return 0;
 }
